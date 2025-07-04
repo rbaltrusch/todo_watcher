@@ -9,13 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type Todo struct {
-	Source   string `json:"source"`
-	Content  string `json:"content"`
-	Status   int    `json:"status"`
-	Subtasks []Todo `json:"subtasks,omitempty"`
-}
-
 func getTasks(path string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		todos, err := model.ParseFiles(path)
