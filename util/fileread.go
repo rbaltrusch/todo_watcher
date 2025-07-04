@@ -8,7 +8,7 @@ import (
 type Result struct {
 	Scanner  *bufio.Scanner
 	Err      error
-	Filepath string
+	FilePath string
 	Close    func()
 }
 
@@ -35,7 +35,7 @@ func CreateFileReaderIterator(path string) (<-chan Result, error) {
 			}
 
 			scanner := bufio.NewScanner(file)
-			ch <- Result{Scanner: scanner, Filepath: filePath, Close: func() { file.Close() }}
+			ch <- Result{Scanner: scanner, FilePath: filePath, Close: func() { file.Close() }}
 		}
 	}()
 	return ch, nil

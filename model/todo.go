@@ -3,13 +3,15 @@ package model
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 type Todo struct {
-	Status   int     `json:"status"`
-	Source   string  `json:"source,omitempty"`
-	Content  string  `json:"content,omitempty"`
-	SubTasks []*Todo `json:"subtasks,omitempty"`
+	Status   int        `json:"status"`
+	Date     *time.Time `json:"date,omitempty"`
+	Source   string     `json:"source,omitempty"`
+	Content  string     `json:"content,omitempty"`
+	SubTasks []*Todo    `json:"subtasks,omitempty"`
 }
 
 func (t Todo) formatStatus() string {

@@ -1,9 +1,12 @@
 package model
 
 import (
+	"fmt"
 	"log"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"todo_watcher/util"
 )
@@ -50,7 +53,6 @@ func determineIndentationLevel(line string) int {
 	return indentation
 }
 
-// TODO: extract date from filename
 // TODO: extract tentative (ending with question mark)
 
 func parseTodoLine(line string, result *TodoParseResult) {
@@ -108,6 +110,24 @@ func parseTodoLine(line string, result *TodoParseResult) {
 	result.Latest = &todo
 }
 
+var datePattern = regexp.MustCompile(`^(\d{6})([^\d])`)
+
+func parseFilePathDate(filePath string) *time.Time {
+	filename := filepath.Base(filePath)
+	matches := datePattern.FindStringSubmatch(filename)
+	if len(matches) < 2 {
+		return nil
+	}
+
+	// Parse YYMMDD date format
+	date, err := time.Parse("060102", matches[1])
+	if err != nil {
+		return nil
+	}
+	fmt.Println("Parsed date from filename:", date)
+	return &date
+}
+
 func ParseFiles(path string) ([]*Todo, error) {
 	parseResult := TodoParseResult{}
 	iter, err := util.CreateFileReaderIterator(path)
@@ -121,7 +141,7 @@ func ParseFiles(path string) ([]*Todo, error) {
 			continue
 		}
 
-		todo := Todo{Source: file.Filepath}
+		todo := Todo{Source: file.FilePath, Date: parseFilePathDate(file.FilePath)}
 		parseResult.Todos = append(parseResult.Todos, &todo)
 		parseResult.IndentationLevels.Push(0)
 		parseResult.Groups.Push(&todo)
