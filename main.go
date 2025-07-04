@@ -73,95 +73,137 @@ func determineStatus(status string) int {
 	}
 }
 
-func readFiles(path string) ([]Todo, error) {
-	var todos []Todo
+type Result struct {
+	Scanner  *bufio.Scanner
+	Err      error
+	Filepath string
+	Close    func()
+}
+
+func createFileReaderIterator(path string) (<-chan Result, error) {
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		return nil, err
 	}
 
-	re := regexp.MustCompile(`^\s*([x~])?\s*(.*)$`)
-	dividerPattern := regexp.MustCompile(`^\s*([-=]+)\s*(.*)$`)
-	for _, entry := range entries {
-		if entry.IsDir() {
+	ch := make(chan Result)
+	go func() {
+		defer close(ch)
+
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+
+			filePath := path + "/" + entry.Name()
+			file, err := os.Open(filePath)
+			if err != nil {
+				ch <- Result{Err: err}
+				continue
+			}
+
+			scanner := bufio.NewScanner(file)
+			ch <- Result{Scanner: scanner, Filepath: filePath, Close: func() { file.Close() }}
+		}
+	}()
+	return ch, nil
+}
+
+type TodoParseResult struct {
+	Todos     []Todo
+	Group     *Todo
+	GroupType int
+}
+
+var stripPattern = regexp.MustCompile(`\s*:\s*$`)
+var pattern = regexp.MustCompile(`^\s*([x~])?\s*(.*)$`)
+var dividerPattern = regexp.MustCompile(`^\s*([-=]+)\s*(.*)$`)
+
+func parseTodoLine(line string, filepath string, result *TodoParseResult) {
+	group := result.Group
+	groupType := result.GroupType
+
+	if strings.TrimSpace(line) == "" {
+		return
+	}
+
+	// skip simple divider lines, but not labelled dividers
+	dividerMatches := dividerPattern.FindStringSubmatch(line)
+	if length := len(dividerMatches); length > 0 && length <= 2 {
+		return
+	}
+	isDivider := len(dividerMatches) > 2
+	if isDivider {
+		groupType = DIVIDER_GROUP
+	}
+	// fmt.Println(line, len(dividerMatches), isDividerGroup, groupType)
+
+	// check for subtasks grouped by indentation
+	if strings.HasPrefix(line, "\t") || strings.HasPrefix(line, " ") {
+		if groupType != INDENTED_GROUP {
+			groupType = INDENTED_GROUP
+			group = &result.Todos[len(result.Todos)-1]
+		}
+	} else if groupType == INDENTED_GROUP {
+		groupType = UNGROUPED
+	}
+
+	matches := pattern.FindStringSubmatch(line)
+	var todo Todo
+	if len(matches) < 3 {
+		todo.Content = line
+		todo.Status = NOT_STARTED
+	} else {
+		todo.Content = matches[2]
+		todo.Status = determineStatus(matches[1])
+	}
+	if isDivider {
+		todo.Content = dividerMatches[2]
+		if strings.Contains(todo.Content, "done") {
+			todo.Status = COMPLETED
+		}
+	}
+	todo.Content = stripPattern.ReplaceAllString(todo.Content, "")
+	todo.Source = filepath
+
+	// fmt.Println(line, len(dividerMatches), isDividerGroup, groupType, groupType == UNGROUPED)
+	if groupType == UNGROUPED || groupType == DIVIDER_GROUP {
+		result.Todos = append(result.Todos, todo)
+		if groupType == DIVIDER_GROUP {
+			group = &result.Todos[len(result.Todos)-1]
+		}
+	} else {
+		if group.Status == COMPLETED {
+			todo.Status = COMPLETED
+		}
+		group.Subtasks = append(group.Subtasks, todo)
+	}
+
+	result.Group = group
+	result.GroupType = groupType
+}
+
+func readFiles(path string) ([]Todo, error) {
+	parseResult := TodoParseResult{}
+	iter, err := createFileReaderIterator(path)
+	if err != nil {
+		return nil, err
+	}
+
+	for file := range iter {
+		if file.Err != nil {
+			log.Printf("Error reading file: %v", file.Err)
 			continue
 		}
 
-		filePath := path + "/" + entry.Name()
-		file, err := os.Open(filePath)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer file.Close()
-
-		scanner := bufio.NewScanner(file)
-		var group *Todo
-		var isDividerGroup bool
-		groupType := UNGROUPED
+		scanner := file.Scanner
 		for scanner.Scan() {
 			line := scanner.Text()
-			if strings.TrimSpace(line) == "" {
-				continue
-			}
-
-			// skip simple divider lines, but not labelled dividers
-			dividerMatches := dividerPattern.FindStringSubmatch(line)
-			if length := len(dividerMatches); length > 0 && length <= 2 {
-				continue
-			}
-			isDividerGroup = len(dividerMatches) > 2
-			if isDividerGroup {
-				groupType = DIVIDER_GROUP
-			}
-			fmt.Println(line, len(dividerMatches), isDividerGroup, groupType)
-
-			// check for subtasks grouped by indentation
-			if strings.HasPrefix(line, "\t") || strings.HasPrefix(line, " ") {
-				if groupType != INDENTED_GROUP {
-					groupType = INDENTED_GROUP
-					group = &todos[len(todos)-1]
-				}
-			} else if groupType == INDENTED_GROUP {
-				groupType = UNGROUPED
-			}
-
-			matches := re.FindStringSubmatch(line)
-			var todo Todo
-			if len(matches) < 3 {
-				todo.Content = line
-				todo.Status = NOT_STARTED
-			} else {
-				todo.Content = matches[2]
-				todo.Status = determineStatus(matches[1])
-			}
-			if isDividerGroup {
-				todo.Content = dividerMatches[2]
-				if strings.Contains(todo.Content, "done") {
-					todo.Status = COMPLETED
-				}
-			}
-			todo.Source = filePath
-
-			fmt.Println(line, len(dividerMatches), isDividerGroup, groupType, groupType == UNGROUPED, isDividerGroup)
-			if groupType == UNGROUPED || isDividerGroup {
-				todos = append(todos, todo)
-				if isDividerGroup {
-					group = &todos[len(todos)-1]
-				}
-			} else {
-				if group.Status == COMPLETED {
-					todo.Status = COMPLETED
-				}
-				group.Subtasks = append(group.Subtasks, todo)
-			}
+			parseTodoLine(line, file.Filepath, &parseResult)
 		}
-
-		err = scanner.Err()
-		if err != nil {
-			log.Fatal(err)
-		}
+		file.Close()
 	}
-	return todos, nil
+	return parseResult.Todos, nil
 }
 
 func getTasks(path string) func(c *gin.Context) {
@@ -177,6 +219,14 @@ func getTasks(path string) func(c *gin.Context) {
 
 func main() {
 	path := "C:/Users/richa/Desktop/todo"
+	todos, err := readFiles(path)
+	if err != nil {
+		log.Fatalf("Error reading files: %v", err)
+	}
+	for _, todo := range todos {
+		fmt.Println(todo)
+	}
+
 	router := gin.Default()
 	router.GET("/tasks", getTasks(path))
 	router.Run("localhost:8080")
