@@ -15,6 +15,7 @@ const (
 	NOT_STARTED = iota
 	IN_PROGRESS = iota
 	COMPLETED   = iota
+	DROPPED     = iota
 )
 
 func determineStatus(status string) int {
@@ -23,6 +24,8 @@ func determineStatus(status string) int {
 		return COMPLETED
 	case "~":
 		return IN_PROGRESS
+	case "#":
+		return DROPPED
 	default:
 		return NOT_STARTED
 	}
@@ -36,7 +39,7 @@ type TodoParseResult struct {
 }
 
 var stripPattern = regexp.MustCompile(`\s*:\s*$`)
-var pattern = regexp.MustCompile(`^\s*([x~])?\s*(.*)$`)
+var pattern = regexp.MustCompile(`^\s*([x~#])?\s*(.*)$`)
 var dividerPattern = regexp.MustCompile(`^\s*([-=]+)\s*(.*)$`)
 
 func determineIndentationLevel(line string) int {
@@ -101,6 +104,12 @@ func parseTodoLine(line string, result *TodoParseResult) {
 		todo.Status = determineStatus(matches[1])
 	}
 	todo.Content = stripPattern.ReplaceAllString(todo.Content, "")
+	if todo.Status > NOT_STARTED && todo.Status != DROPPED {
+		group, _ := result.Groups.Top()
+		if group.Status == NOT_STARTED {
+			group.Status = IN_PROGRESS
+		}
+	}
 
 	group, _ := result.Groups.Top()
 	if group.Status == COMPLETED {
