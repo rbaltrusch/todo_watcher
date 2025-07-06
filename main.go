@@ -7,6 +7,7 @@ import (
 	"todo_watcher/model"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func getTasks(path string) func(c *gin.Context) {
@@ -26,11 +27,26 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error reading files: %v", err)
 	}
-	for _, todo := range todos {
-		fmt.Println(todo)
+}
+
+func getEnvOrDefault(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}
+
+func main() {
+	godotenv.Load()
+	path := os.Getenv("TODO_FOLDER")
+	if path == "" {
+		log.Fatal("TODO_FOLDER environment variable must be set")
 	}
 
+	address := fmt.Sprintf("%s:%s", getEnvOrDefault("HOST", "localhost"), getEnvOrDefault("PORT", "8080"))
+
 	router := gin.Default()
-	router.GET("/tasks", getTasks(path))
-	router.Run("localhost:8080")
+	router.GET("/api/todos", getTasks(path))
+	router.Run(address)
 }
