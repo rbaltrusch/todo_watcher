@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/exec"
 
 	"todo_watcher/model"
 
@@ -21,11 +23,29 @@ func getTasks(path string) func(c *gin.Context) {
 	}
 }
 
-func main() {
-	path := "C:/Users/richa/Desktop/todo"
-	todos, err := model.ParseFiles(path)
-	if err != nil {
-		log.Fatalf("Error reading files: %v", err)
+// currently unsafe, but should be fine because this is local only
+func openFile(path string) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		filePath := c.Query("file")
+		if filePath == "" {
+			c.JSON(400, gin.H{"error": "file query parameter is required"})
+			return
+		}
+
+		execPath, err := exec.LookPath("code")
+		if err != nil {
+			c.JSON(500, gin.H{"error": "could not find code editor"})
+			return
+		}
+		cmd := exec.Command(execPath, filePath)
+		cmd.Dir = path
+		err = cmd.Start()
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("could not open file: %v", err)})
+			return
+		}
+
+		c.JSON(200, gin.H{"status": "OK"})
 	}
 }
 
@@ -48,5 +68,6 @@ func main() {
 
 	router := gin.Default()
 	router.GET("/api/todos", getTasks(path))
+	router.GET("/api/open", openFile(path))
 	router.Run(address)
 }
