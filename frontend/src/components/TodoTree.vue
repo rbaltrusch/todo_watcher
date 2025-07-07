@@ -17,15 +17,18 @@
 
 <script lang="ts">
 import { defineComponent } from 'vue';
-import TodoItem, { Todo, TodoStatus } from './TodoItem.vue';
+import TodoItem, { Todo, TodoStatus, TodoPriority } from './TodoItem.vue';
 
 // TODO: "Get Random Item" button
 // TODO: Auto-refresh via websocket + filewatcher
 // TODO: "Collapse All" and "Expand All" buttons
 // TODO: global "Collapse" button
 // TODO: filter by status
+// TODO: filter by priority
+// TODO: filter out dropped or tentative tasks
 
 const statuses = ["not started", "in progress", "done", "dropped"] as const;
+const priorities = {[TodoPriority.LOW]: "Low", [TodoPriority.MEDIUM]: "Medium", [TodoPriority.HIGH]: "High"} as const;
 
 const sum = (acc: number, cur: number) => acc + cur
 const isDropped = (todo: Todo): boolean => todo.status === TodoStatus.DROPPED;
@@ -63,12 +66,16 @@ function countDone(todo: Todo): number {
 
 function initExistingTodo(todo: Todo, expand: boolean = true): Todo {
   const progress = determineProgress(todo);
+  const priority: TodoPriority = todo.priority ?? TodoPriority.MEDIUM;
   const status = progress === 100 && todo.status != TodoStatus.DROPPED ? TodoStatus.DONE : todo.status;
   return {
     ...todo,
     status: status,
     statusText: statuses[status],
     progress: progress,
+    tentative: todo.tentative ?? false,
+    priority: priority,
+    priorityText: todo.content !== undefined ? priorities[priority] : undefined,
     showSubtasks: expand,
     subtasks: todo.subtasks?.map((x: Todo) => initExistingTodo(x, false)),
     date: todo.date == undefined ? "unknown date" : new Date(todo.date).toLocaleDateString(),
@@ -127,7 +134,7 @@ export default defineComponent({
 
 .btn {
   background-color: #76889b;
-  color: white;
+  color: var(--color-text);;
   border-radius: 5px;
   padding: 0.5rem 1rem;
   margin-bottom: 1rem;

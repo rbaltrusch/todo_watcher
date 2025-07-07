@@ -1,5 +1,7 @@
 package model
 
+// TODO: tests
+
 import (
 	"fmt"
 	"log"
@@ -18,6 +20,12 @@ const (
 	DROPPED     = iota
 )
 
+const (
+	LOW_PRIORITY    = -1
+	MEDIUM_PRIORITY = 0
+	HIGH_PRIORITY   = 1
+)
+
 func determineStatus(status string) int {
 	switch strings.TrimSpace(status) {
 	case "x":
@@ -31,6 +39,17 @@ func determineStatus(status string) int {
 	}
 }
 
+func determinePriority(priority string) int {
+	switch strings.TrimSpace(priority) {
+	case "!":
+		return HIGH_PRIORITY
+	case ".":
+		return LOW_PRIORITY
+	default:
+		return MEDIUM_PRIORITY
+	}
+}
+
 type TodoParseResult struct {
 	Todos             []*Todo
 	Latest            *Todo
@@ -39,7 +58,7 @@ type TodoParseResult struct {
 }
 
 var stripPattern = regexp.MustCompile(`\s*:\s*$`)
-var pattern = regexp.MustCompile(`^\s*([x~#])?\s*(.*)$`)
+var pattern = regexp.MustCompile(`^\s*([x~#])?\s*([!\.])?\s*(.*?)(\?)?$`)
 var dividerPattern = regexp.MustCompile(`^\s*([-=]+)\s*(.*)$`)
 
 func determineIndentationLevel(line string) int {
@@ -59,7 +78,7 @@ func determineIndentationLevel(line string) int {
 // TODO: extract tentative (ending with question mark)
 
 func parseTodoLine(line string, result *TodoParseResult) {
-	todo := Todo{Content: "", Status: NOT_STARTED}
+	todo := Todo{Content: "", Status: NOT_STARTED, Priority: MEDIUM_PRIORITY}
 
 	if strings.TrimSpace(line) == "" {
 		return
@@ -90,20 +109,26 @@ func parseTodoLine(line string, result *TodoParseResult) {
 		}
 	}
 
-	matches := pattern.FindStringSubmatch(line)
+	trimmedLine := strings.TrimSpace(line)
+	matches := pattern.FindStringSubmatch(trimmedLine)
 	if isDividerGroupHeader {
 		defer result.Groups.Push(&todo)
 		todo.Content = dividerMatches[2]
 		if strings.Contains(todo.Content, "done") {
 			todo.Status = COMPLETED
 		}
-	} else if len(matches) < 3 {
-		todo.Content = line
+	} else if len(matches) < 5 {
+		todo.Content = strings.TrimFunc(trimmedLine, func(r rune) bool { return r == '?' })
+		todo.Tentative = strings.HasSuffix(trimmedLine, "?")
 	} else {
-		todo.Content = matches[2]
+		todo.Tentative = matches[4] == "?"
+		todo.Content = matches[3]
+		todo.Priority = determinePriority(matches[2])
 		todo.Status = determineStatus(matches[1])
 	}
 	todo.Content = stripPattern.ReplaceAllString(todo.Content, "")
+	todo.Content = strings.TrimSpace(todo.Content)
+
 	if todo.Status > NOT_STARTED && todo.Status != DROPPED {
 		group, _ := result.Groups.Top()
 		if group.Status == NOT_STARTED {

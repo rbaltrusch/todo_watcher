@@ -1,12 +1,17 @@
 <template>
-  <div class="todo-item" :class="{dropped: item.statusText === 'dropped'}">
-    <div class="wrapper">
+  <div class="todo-item" :class="{ dropped: item.statusText === 'dropped' }">
+    <div class="wrapper" :class="[{ tentative: item.tentative }, item.priorityText?.toLowerCase() + '-priority']">
       <p class="flex-item date" v-if="item.date === 'unknown date' && item.source"></p>
       <p class="flex-item date" v-if="item.date !== 'unknown date'">{{ item.date }}</p>
       <p class="flex-item source" v-if="item.source">{{ item.source }}</p>
-      <p class="flex-item content" v-if="item.content">{{ item.content }}</p>
-      <p class="flex-item status" v-if="item.progress !== undefined" :class="item.statusText?.replaceAll(' ', '')">{{
-        item.progress }}% done</p>
+      <p class="flex-item content" v-if="item.content">{{ item.content + (item.tentative ? '?' : '') }}</p>
+      <div class="flex-item wrapper status-priority">
+        <p class="flex-item priority" v-if="item.content && item.priorityText?.toLowerCase() !== 'medium'">{{
+          item.priorityText }} priority</p>
+        <p class="flex-item priority" v-if="item.priorityText?.toLowerCase() === 'medium'"></p> <!-- kind of a layout hack to have status always at end of right hand side -->
+        <p class="flex-item status" v-if="item.progress !== undefined" :class="item.statusText?.replaceAll(' ', '')">{{
+          item.progress }}% done</p>
+      </div>
       <button class="flex-item btn" v-if="item.source" @click="openFile(item.source)">Open</button>
       <button class="flex-item btn" v-if="item.subtasks?.length" @click="item.showSubtasks = !item.showSubtasks">{{
         item.showSubtasks ?
@@ -29,10 +34,19 @@ export enum TodoStatus {
   DROPPED = 3
 }
 
-export interface Todo {
+export enum TodoPriority {
+  LOW = -1,
+  MEDIUM = 0,
+  HIGH = 1
+}
+
+export type Todo = {
   status: TodoStatus;
   statusText?: string; // set by frontend based on status
   progress?: number; // 0-100, set by frontend based on status and status of subtasks
+  priority?: TodoPriority;
+  priorityText?: string; // set by frontend based on priority
+  tentative?: boolean;
   date?: string;
   source?: string;
   content?: string;
@@ -74,16 +88,25 @@ export default defineComponent({
   min-width: 50vw;
 }
 
+.todo-item > .wrapper {
+  border-top: 1px solid #333;
+}
+
 .wrapper {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
-  border-top: 1px solid #333;
   border-radius: 5%;
+}
+
+.wrapper.status-priority {
+  width: 30%;
 }
 
 .flex-item {
   margin: 0.25rem 0;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
 }
 
 .source {
@@ -103,9 +126,15 @@ export default defineComponent({
   text-wrap: nowrap;
 }
 
+.priority {
+  width: 10%;
+  text-align: center;
+  text-wrap: nowrap;
+}
+
 .btn {
   background-color: #76889b;
-  color: white;
+  color: var(--color-text);;
   border-radius: 5px;
   min-width: 10%;
   text-align: center;
@@ -127,5 +156,29 @@ export default defineComponent({
 
 .todo-item.dropped {
   opacity: 0.5;
+}
+
+.wrapper.tentative {
+  opacity: 0.85;
+  color: rgb(65, 66, 63);
+  border-radius: 3px;
+}
+
+.wrapper.low-priority {
+  opacity: 0.35;
+  background: linear-gradient(to right, rgb(100, 106, 88), rgb(112, 120, 95));
+  border-radius: 3px;
+}
+
+.wrapper.high-priority {
+  background-color: rgb(220, 72, 72, 0.5);
+  border-radius: 3px;
+}
+
+.wrapper.high-priority:has(> .status-priority > .status.done) {
+  opacity: 0.35;
+  color: rgb(163, 226, 163);
+  background: linear-gradient(to right, rgba(88, 220, 88, 0.5), rgba(172, 220, 172, 0.3));
+  border-radius: 3px;
 }
 </style>
