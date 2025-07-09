@@ -89,8 +89,22 @@ export default defineComponent({
   min-width: 50vw;
 }
 
+.todo-item:not(.outer):hover {
+  transform: scale(1.015);
+  border-radius: 5px;
+  border: 1px solid #33373c;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.05));
+  font-size: 1.05rem;
+  color: #eeeeeec4;
+  transition: transform 0.2s ease-in-out, background-color 0.2s ease-in-out , color 0.2s ease-in-out;
+}
+
 .todo-item > .wrapper {
   border-top: 1px solid #333;
+}
+
+.todo-item:hover > .wrapper {
+  border-top: none
 }
 
 .wrapper {
