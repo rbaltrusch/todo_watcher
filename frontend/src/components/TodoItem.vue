@@ -1,5 +1,5 @@
 <template>
-  <div class="todo-item" :class="{ dropped: item.statusText === 'dropped' }">
+  <div class="todo-item" v-if="item.visible" :class="{ dropped: item.statusText === 'dropped', outer: item.source }">
     <div class="wrapper" :class="[{ tentative: item.tentative }, item.priorityText?.toLowerCase() + '-priority']">
       <p class="flex-item date" v-if="item.date === 'unknown date' && item.source"></p>
       <p class="flex-item date" v-if="item.date !== 'unknown date'">{{ item.date }}</p>
@@ -51,6 +51,7 @@ export type Todo = {
   source?: string;
   content?: string;
   subtasks?: Todo[];
+  visible?: boolean; // set by frontend
   showSubtasks?: boolean; // set by frontend
 }
 

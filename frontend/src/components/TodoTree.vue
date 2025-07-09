@@ -1,13 +1,42 @@
 <template>
   <div>
     <h1 class="header">Todos</h1>
+    <p class="doneCount">Total tasks completed: {{ doneCount }}</p>
+    <div class="wrapper">
+      <label class="filter" for="show-dropped">Show dropped tasks
+        <input type="checkbox" id="show-dropped" v-model="showDropped" />
+      </label>
+      <label class="filter" for="show-tentative">Show tentative tasks
+        <input type="checkbox" id="show-tentative" v-model="showTentative" />
+      </label>
+      <label class="filter" for="show-low-priority">Show low priority tasks
+        <input type="checkbox" id="show-low-priority" v-model="showLowPriority" />
+      </label>
+      <label class="filter" for="show-done">Show done tasks
+        <input type="checkbox" id="show-done" v-model="showDone" />
+      </label>
+      <label class="filter" for="show-only-high-priority">Show only high priority tasks
+        <input type="checkbox" id="show-only-high-priority" v-model="showOnlyHighPriority" />
+      </label>
+    </div>
     <div class="wrapper">
       <button class="btn" @click="fetchTodos">Refresh</button>
+      <button class="btn" @click="expandAll">Expand All</button>
+      <button class="btn" @click="collapseAll">Collapse All</button>
+      <button class="btn" @click="getRandomTodo">Get Random Task</button>
+      <button class="btn" @click="resetFilters">Reset filters</button>
     </div>
-    <p class="doneCount">Total tasks completed: {{ done }}</p>
+    <div class="random-todo-wrapper random-todo-container" v-if="randomTodo">
+      <h2 class="header">Random Task</h2>
+      <div class="random-todo-container">
+        <!-- <p class="random-todo">Random Todo: {{ randomTodo.content }}</p> -->
+        <TodoItem :item="randomTodo" />
+        <button class="btn" @click="randomTodo = null">Clear</button>
+      </div>
+    </div>
     <div class="todo_list_container">
       <ul class="todo-list">
-        <li v-for="(todo, index) in todos" :key="todo.id">
+        <li v-for="(todo, index) in filteredTodos" :key="todo.id">
           <TodoItem :item="todo" :key="index" />
         </li>
       </ul>
@@ -19,16 +48,11 @@
 import { defineComponent } from 'vue';
 import TodoItem, { Todo, TodoStatus, TodoPriority } from './TodoItem.vue';
 
-// TODO: "Get Random Item" button
 // TODO: Auto-refresh via websocket + filewatcher
-// TODO: "Collapse All" and "Expand All" buttons
 // TODO: global "Collapse" button
-// TODO: filter by status
-// TODO: filter by priority
-// TODO: filter out dropped or tentative tasks
 
 const statuses = ["not started", "in progress", "done", "dropped"] as const;
-const priorities = {[TodoPriority.LOW]: "Low", [TodoPriority.MEDIUM]: "Medium", [TodoPriority.HIGH]: "High"} as const;
+const priorities = { [TodoPriority.LOW]: "Low", [TodoPriority.MEDIUM]: "Medium", [TodoPriority.HIGH]: "High" } as const;
 
 const sum = (acc: number, cur: number) => acc + cur
 const isDropped = (todo: Todo): boolean => todo.status === TodoStatus.DROPPED;
@@ -77,18 +101,94 @@ function initExistingTodo(todo: Todo, expand: boolean = true): Todo {
     priority: priority,
     priorityText: todo.content !== undefined ? priorities[priority] : undefined,
     showSubtasks: expand,
+    visible: true,
     subtasks: todo.subtasks?.map((x: Todo) => initExistingTodo(x, false)),
     date: todo.date == undefined ? "unknown date" : new Date(todo.date).toLocaleDateString(),
   };
 };
 
+type Filter = (todo: Todo) => boolean;
+const combineFilters = (a: Filter, b: Filter): Filter => (todo: Todo) => a(todo) && b(todo);
+const hideRecursively = (todos: Todo[], filter: Filter): void => todos.forEach((todo: Todo) => {
+  todo.visible = filter(todo);
+  hideRecursively(todo.subtasks || [], filter);
+});
+
+// originally modelled as a filter that was mutating the todo tree, but this was recursively
+// triggering Vue's reactivity system and causing infinite loops
+const checkHighPriorityRecursively = (todo: Todo, showDone: boolean): boolean => {
+  if (!showDone && isDone(todo)) {
+    todo.visible = false;
+    return false;
+  }
+
+  const highPrioSubTask = todo.subtasks?.filter((todo: Todo) => checkHighPriorityRecursively(todo, showDone)).length || false;
+  if (todo.priority === TodoPriority.HIGH || highPrioSubTask) {
+    todo.visible = true;
+    return true;
+  }
+
+  todo.visible = false;
+  return false;
+};
+
+const checkInProgressRecursively = checkHighPriorityRecursively; // TODO
+
+const expandSubTasks = (todo: Todo, setting: boolean): void => {
+  todo.showSubtasks = setting;
+  todo.subtasks?.forEach((todo: Todo) => expandSubTasks(todo, setting));
+};
+
 export default defineComponent({
   name: 'TodoTree',
   components: { TodoItem },
+  computed: {
+    filters(): Filter[] {
+      const filters: Filter[] = [];
+      if (!this.showDropped) { filters.push((todo: Todo) => todo.status !== TodoStatus.DROPPED); }
+      if (!this.showTentative) { filters.push((todo: Todo) => !todo.tentative); }
+      if (!this.showLowPriority) { filters.push((todo: Todo) => todo.priority !== TodoPriority.LOW); }
+      if (!this.showDone) { filters.push((todo: Todo) => todo.status !== TodoStatus.DONE); }
+      return filters;
+    },
+    filteredTodos(): Todo[] {
+      if (this.showOnlyHighPriority) {
+        this.todos.forEach((todo: Todo) => checkHighPriorityRecursively(todo, this.showDone));
+        return this.todos;
+      }
+      if (this.showOnlyInProgress) {
+        this.todos.forEach((todo: Todo) => checkInProgressRecursively(todo, this.showDone));
+        return this.todos;
+      }
+      const filter = this.filters.reduce(combineFilters, () => true);
+      hideRecursively(this.todos, filter);
+      return this.todos;
+    },
+    todoMap(): Map<number, Todo> {
+      const map = new Map<number, Todo>();
+      let counter = 0;
+      const traverse = (todo: Todo) => {
+        todo.id = counter++;
+        map.set(todo.id, todo);
+        todo.subtasks?.forEach(traverse);
+      };
+      this.filteredTodos.forEach(traverse);
+      return map;
+    },
+    doneCount(): number {
+      return this.todos.map(countDone).reduce(sum, 0);
+    }
+  },
   data() {
     return {
       todos: [] as Todo[],
-      done: 0,
+      randomTodo: null as Todo | null,
+      showDropped: false as boolean,
+      showTentative: false as boolean,
+      showLowPriority: false as boolean,
+      showDone: false as boolean,
+      showOnlyHighPriority: false as boolean,
+      showOnlyInProgress: false as boolean,
     };
   },
   methods: {
@@ -99,8 +199,29 @@ export default defineComponent({
           const todos = data.map(initExistingTodo);
           todos.sort((a: Todo, b: Todo) => b.progress - a.progress)
           this.todos = todos;
-          this.done = todos.map(countDone).reduce(sum, 0);
         });
+    },
+    getRandomTodo() {
+      const amount = this.todoMap.size;
+      const randomIndex = Math.floor(Math.random() * amount);
+      this.randomTodo = this.todoMap.get(randomIndex);
+      if (!this.randomTodo?.content) {
+        this.getRandomTodo(); // ensure we get a valid todo with content
+      }
+    },
+    resetFilters() {
+      this.showDropped = false;
+      this.showTentative = false;
+      this.showLowPriority = false;
+      this.showDone = false;
+      this.showOnlyHighPriority = false;
+      this.showOnlyInProgress = false;
+    },
+    expandAll() {
+      this.todos.forEach((todo: Todo) => expandSubTasks(todo, true));
+    },
+    collapseAll() {
+      this.todos.forEach((todo: Todo) => expandSubTasks(todo, false));
     }
   },
   mounted() {
@@ -134,15 +255,52 @@ export default defineComponent({
 
 .btn {
   background-color: #76889b;
-  color: var(--color-text);;
+  color: var(--color-text);
   border-radius: 5px;
   padding: 0.5rem 1rem;
   margin-bottom: 1rem;
 }
 
+.filter {
+  margin-left: 1rem;
+}
+
 .doneCount {
+  font-size: 1.2rem;
   color: rgb(100, 211, 100);
   text-align: center;
-  margin-bottom: 1rem;
+  margin: 1rem;
 }
+
+.random-todo-wrapper {
+  border: 2px solid #ccc;
+  border-radius: 5px;
+  margin: 1rem auto;
+  padding: 0.5rem;
+}
+
+.random-todo-wrapper > .header {
+  text-wrap: nowrap;
+  text-align: center;
+  font-size: 1rem;
+  margin-bottom: 0;
+}
+
+.random-todo-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.random-todo-container > .btn {
+  margin-bottom: 0;
+}
+
+.random-todo {
+  text-align: center;
+  font-style: italic;
+  padding: 0.5rem;
+}
+
 </style>
