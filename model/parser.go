@@ -129,16 +129,20 @@ func parseTodoLine(line string, result *TodoParseResult) {
 	todo.Content = stripPattern.ReplaceAllString(todo.Content, "")
 	todo.Content = strings.TrimSpace(todo.Content)
 
+	group, _ := result.Groups.Top()
 	if todo.Status > NOT_STARTED && todo.Status != DROPPED {
-		group, _ := result.Groups.Top()
 		if group.Status == NOT_STARTED {
 			group.Status = IN_PROGRESS
 		}
 	}
-
-	group, _ := result.Groups.Top()
 	if group.Status == COMPLETED {
 		todo.Status = COMPLETED
+	}
+
+	// it makes no sense to have a todo with a different priority than the group
+	// so group priority overrides todo priority
+	if group.Priority != MEDIUM_PRIORITY {
+		todo.Priority = group.Priority
 	}
 	group.SubTasks = append(group.SubTasks, &todo)
 	result.Latest = &todo
