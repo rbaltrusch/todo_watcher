@@ -13,7 +13,7 @@
           item.progress }}% done</p>
       </div>
       <button class="flex-item btn" v-if="item.source" @click="openFile(item.source)">Open</button>
-      <button class="flex-item btn" v-if="item.subtasks?.length" @click="item.showSubtasks = !item.showSubtasks">{{
+      <button class="flex-item btn" v-if="item.subtasks?.filter(x => x.visible).length" @click="item.showSubtasks = !item.showSubtasks">{{
         item.showSubtasks ?
           "Collapse" : "Expand" }}</button>
     </div>
