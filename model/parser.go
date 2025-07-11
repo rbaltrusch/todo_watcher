@@ -119,6 +119,9 @@ func parseTodoLine(line string, result *TodoParseResult) {
 		if strings.Contains(todo.Content, "done") {
 			todo.Status = COMPLETED
 		}
+		if strings.Contains(todo.Content, "dropped") {
+			todo.Status = DROPPED
+		}
 	} else if len(matches) < 5 {
 		todo.Content = strings.TrimFunc(trimmedLine, func(r rune) bool { return r == '?' })
 		todo.Tentative = strings.HasSuffix(trimmedLine, "?")
