@@ -3,6 +3,9 @@
     <h1 class="header">Todos</h1>
     <p class="doneCount">Total tasks completed: {{ doneCount }}</p>
     <div class="wrapper">
+      <input id="queryFilter" class="icon" type="text" autocomplete="off" v-model="searchQuery" placeholder="Search tasks..." title="Filter tasks" />
+    </div>
+    <div class="wrapper">
       <label class="filter" for="show-dropped">Show dropped tasks
         <input type="checkbox" id="show-dropped" v-model="showDropped" />
       </label>
@@ -29,7 +32,6 @@
     <div class="random-todo-wrapper random-todo-container" v-if="randomTodo">
       <h2 class="header">Random Task</h2>
       <div class="random-todo-container">
-        <!-- <p class="random-todo">Random Todo: {{ randomTodo.content }}</p> -->
         <TodoItem :item="randomTodo" />
         <button class="btn" @click="randomTodo = null">Clear</button>
       </div>
@@ -50,6 +52,8 @@ import TodoItem, { Todo, TodoStatus, TodoPriority } from './TodoItem.vue';
 
 // TODO: Auto-refresh via websocket + filewatcher
 // TODO: global "Collapse" button
+// TODO: sort either by date or by progress
+// TODO: "show all" button
 
 const statuses = ["not started", "in progress", "done", "dropped"] as const;
 const priorities = { [TodoPriority.LOW]: "Low", [TodoPriority.MEDIUM]: "Medium", [TodoPriority.HIGH]: "High" } as const;
@@ -139,6 +143,18 @@ const expandSubTasks = (todo: Todo, setting: boolean): void => {
   todo.subtasks?.forEach((todo: Todo) => expandSubTasks(todo, setting));
 };
 
+const constructSearchQuery = (searchQuery: string, todos: Todo[]): () => void => {
+  if (!searchQuery) {
+    return () => {};
+  }
+
+  const query = searchQuery.toLowerCase();
+  const includes = (x: string | undefined) => x?.toLowerCase().includes(query) || false;
+  const includes_todo = (x: Todo) => includes(x.content) || includes(x.source) || includes(x.date);
+  const matches = (x: Todo) => x.visible && (includes_todo(x) || x.subtasks?.some(matches)) || false;
+  return () => hideRecursively(todos, matches);
+};
+
 export default defineComponent({
   name: 'TodoTree',
   components: { TodoItem },
@@ -152,22 +168,29 @@ export default defineComponent({
       return filters;
     },
     filteredTodos(): Todo[] {
+      const searchQuery = constructSearchQuery(this.searchQuery, this.todos);
       if (this.showOnlyHighPriority) {
         this.todos.forEach((todo: Todo) => checkHighPriorityRecursively(todo, this.showDone));
+        searchQuery();
         return this.todos;
       }
       if (this.showOnlyInProgress) {
         this.todos.forEach((todo: Todo) => checkInProgressRecursively(todo, this.showDone));
+        searchQuery();
         return this.todos;
       }
       const filter = this.filters.reduce(combineFilters, () => true);
       hideRecursively(this.todos, filter);
+      searchQuery();
       return this.todos;
     },
-    todoMap(): Map<number, Todo> {
+    numberedTodoMap(): Map<number, Todo> {
       const map = new Map<number, Todo>();
       let counter = 0;
       const traverse = (todo: Todo) => {
+        if (!todo.visible) {
+          return;
+        }
         todo.id = counter++;
         map.set(todo.id, todo);
         todo.subtasks?.forEach(traverse);
@@ -175,13 +198,16 @@ export default defineComponent({
       this.filteredTodos.forEach(traverse);
       return map;
     },
+    todos(): Todo[] {
+      return Array.from(this.todoMap.values());
+    },
     doneCount(): number {
       return this.todos.map(countDone).reduce(sum, 0);
     }
   },
   data() {
     return {
-      todos: [] as Todo[],
+      todoMap: new Map<string, Todo>(),
       randomTodo: null as Todo | null,
       showDropped: false as boolean,
       showTentative: false as boolean,
@@ -189,6 +215,7 @@ export default defineComponent({
       showDone: false as boolean,
       showOnlyHighPriority: false as boolean,
       showOnlyInProgress: false as boolean,
+      searchQuery: '' as string
     };
   },
   methods: {
@@ -197,14 +224,17 @@ export default defineComponent({
         .then(res => res.json())
         .then(data => {
           const todos = data.map(initExistingTodo);
-          todos.sort((a: Todo, b: Todo) => b.progress - a.progress)
-          this.todos = todos;
+          todos.sort((a: Todo, b: Todo) => (b.progress as number) - (a.progress as number))
+          this.todoMap.clear();
+          todos.forEach((todo: Todo) => {
+            this.todoMap.set(todo.source || todo.content as string, todo);
+          });
         });
     },
     getRandomTodo() {
-      const amount = this.todoMap.size;
+      const amount = this.numberedTodoMap.size;
       const randomIndex = Math.floor(Math.random() * amount);
-      this.randomTodo = this.todoMap.get(randomIndex);
+      this.randomTodo = this.numberedTodoMap.get(randomIndex) ?? null;
       if (!this.randomTodo?.content) {
         this.getRandomTodo(); // ensure we get a valid todo with content
       }
@@ -253,12 +283,19 @@ export default defineComponent({
   align-items: center;
 }
 
-.btn {
-  background-color: #76889b;
-  color: var(--color-text);
+label:has(+#queryFilter) {
+  margin-right: 0.5rem;
+}
+
+#queryFilter {
+  padding: 0.25rem;
   border-radius: 5px;
-  padding: 0.5rem 1rem;
-  margin-bottom: 1rem;
+  border: 1px solid #ccc;
+  width: 30%;
+  height: 2rem;
+  background: url("find.png") no-repeat 2.5% 50%;
+  background-size: 9%;
+  text-indent: 11%;
 }
 
 .filter {

@@ -41,6 +41,7 @@ export enum TodoPriority {
 }
 
 export type Todo = {
+  id?: number; // can be set by frontend
   status: TodoStatus;
   statusText?: string; // set by frontend based on status
   progress?: number; // 0-100, set by frontend based on status and status of subtasks
