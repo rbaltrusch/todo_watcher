@@ -61,7 +61,7 @@ type TodoParseResult struct {
 
 var stripPattern = regexp.MustCompile(`\s*:\s*$`)
 var pattern = regexp.MustCompile(`^\s*(x\s|[~#])?\s*([!\.])?\s*(.*?)(\?)?$`)
-var dividerPattern = regexp.MustCompile(`^\s*([-=]+)\s*(.*)$`)
+var dividerPattern = regexp.MustCompile(`^\s*([-=][-=][-=]+)\s*(.*)$`)
 
 func determineIndentationLevel(line string) int {
 	indentation := 0
@@ -77,23 +77,8 @@ func determineIndentationLevel(line string) int {
 	return indentation
 }
 
-// TODO: extract tentative (ending with question mark)
-
-func parseTodoLine(line string, result *TodoParseResult) {
-	todo := Todo{Content: "", Status: NOT_STARTED, Priority: MEDIUM_PRIORITY}
-
-	if strings.TrimSpace(line) == "" {
-		return
-	}
-
-	// skip simple divider lines, but not labelled dividers
-	dividerMatches := dividerPattern.FindStringSubmatch(line)
-	if length := len(dividerMatches); length > 0 && length <= 2 {
-		return
-	}
-	isDividerGroupHeader := len(dividerMatches) > 2
-
-	// check for subtasks grouped by indentation
+// checks for subtasks grouped by indentation
+func parseIndentedTaskGroup(line string, result *TodoParseResult) {
 	indentation := determineIndentationLevel(line)
 	currentIndentation, err := result.IndentationLevels.Top()
 	if err == nil && indentation > currentIndentation {
@@ -110,31 +95,18 @@ func parseTodoLine(line string, result *TodoParseResult) {
 			result.IndentationLevels.Pop()
 		}
 	}
+}
 
-	trimmedLine := strings.TrimSpace(line)
-	matches := pattern.FindStringSubmatch(trimmedLine)
-	if isDividerGroupHeader {
-		defer result.Groups.Push(&todo)
-		todo.Content = dividerMatches[2]
-		if strings.Contains(todo.Content, "done") {
-			todo.Status = COMPLETED
-		}
-		if strings.Contains(todo.Content, "dropped") {
-			todo.Status = DROPPED
-		}
-	} else if len(matches) < 5 {
-		todo.Content = strings.TrimFunc(trimmedLine, func(r rune) bool { return r == '?' })
-		todo.Tentative = strings.HasSuffix(trimmedLine, "?")
-	} else {
-		todo.Tentative = matches[4] == "?"
-		todo.Content = matches[3]
-		todo.Priority = determinePriority(matches[2])
-		todo.Status = determineStatus(matches[1])
+func parseStatusFromDivider(todo *Todo) {
+	if strings.Contains(todo.Content, "done") {
+		todo.Status = COMPLETED
 	}
-	todo.Content = stripPattern.ReplaceAllString(todo.Content, "")
-	todo.Content = strings.TrimSpace(todo.Content)
+	if strings.Contains(todo.Content, "dropped") {
+		todo.Status = DROPPED
+	}
+}
 
-	group, _ := result.Groups.Top()
+func reconcileStatusAndPriority(todo *Todo, group *Todo) {
 	if todo.Status > NOT_STARTED && todo.Status != DROPPED {
 		if group.Status == NOT_STARTED {
 			group.Status = IN_PROGRESS
@@ -149,6 +121,38 @@ func parseTodoLine(line string, result *TodoParseResult) {
 	if group.Priority != MEDIUM_PRIORITY {
 		todo.Priority = group.Priority
 	}
+}
+
+func parseTodoLine(line string, result *TodoParseResult) {
+	todo := Todo{Content: "", Status: NOT_STARTED, Priority: MEDIUM_PRIORITY}
+
+	// skip simple divider lines, but not labelled dividers
+	dividerMatches := dividerPattern.FindStringSubmatch(line)
+	if length := len(dividerMatches); length > 0 && length <= 2 {
+		return
+	}
+	isDividerGroupHeader := len(dividerMatches) > 2
+
+	parseIndentedTaskGroup(line, result)
+	trimmedLine := strings.TrimSpace(line)
+	todo.Tentative = strings.HasSuffix(trimmedLine, "?")
+	matches := pattern.FindStringSubmatch(trimmedLine)
+	if isDividerGroupHeader {
+		defer result.Groups.Push(&todo)
+		todo.Content = dividerMatches[2]
+		parseStatusFromDivider(&todo)
+	} else if len(matches) < 5 {
+		todo.Content = strings.TrimFunc(trimmedLine, func(r rune) bool { return r == '?' })
+	} else {
+		todo.Content = matches[3]
+		todo.Priority = determinePriority(matches[2])
+		todo.Status = determineStatus(matches[1])
+	}
+	todo.Content = stripPattern.ReplaceAllString(todo.Content, "")
+	todo.Content = strings.TrimSpace(todo.Content)
+
+	group, _ := result.Groups.Top()
+	reconcileStatusAndPriority(&todo, group)
 	group.SubTasks = append(group.SubTasks, &todo)
 	result.Latest = &todo
 }
@@ -193,6 +197,9 @@ func ParseFiles(path string) ([]*Todo, error) {
 		scanner := file.Scanner
 		for scanner.Scan() {
 			line := scanner.Text()
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
 			parseTodoLine(line, &parseResult)
 		}
 		file.Close()
