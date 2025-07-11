@@ -10,7 +10,7 @@ PORT (e.g. 8080)
 TODO_FOLDER (e.g. /path/to/todo/folder)
 ```
 
-Run backend:
+Run backend (written in go 1.19):
 
 ```
 go run main.go
