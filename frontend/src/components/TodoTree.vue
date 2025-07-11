@@ -143,6 +143,16 @@ const expandSubTasks = (todo: Todo, setting: boolean): void => {
   todo.subtasks?.forEach((todo: Todo) => expandSubTasks(todo, setting));
 };
 
+const hideRecursivelyShallow = (todos: Todo[], filter: Filter): void => todos.forEach((todo: Todo) => {
+  console.log(`Checking visibility for todo: ${todo.content}`, todo.visible, filter(todo), todo.subtasks?.some(filter));
+  if (todo.visible && filter(todo)) {
+    return true;
+  }
+
+  todo.visible = getAllSubTasksRecursively(todo).some(filter);
+  hideRecursivelyShallow(todo.subtasks || [], filter);
+});
+
 const constructSearchQuery = (searchQuery: string, todos: Todo[]): () => void => {
   if (!searchQuery) {
     return () => {};
@@ -151,8 +161,7 @@ const constructSearchQuery = (searchQuery: string, todos: Todo[]): () => void =>
   const query = searchQuery.toLowerCase();
   const includes = (x: string | undefined) => x?.toLowerCase().includes(query) || false;
   const includes_todo = (x: Todo) => includes(x.content) || includes(x.source) || includes(x.date);
-  const matches = (x: Todo) => x.visible && (includes_todo(x) || x.subtasks?.some(matches)) || false;
-  return () => hideRecursively(todos, matches);
+  return () => hideRecursivelyShallow(todos, includes_todo);
 };
 
 export default defineComponent({
