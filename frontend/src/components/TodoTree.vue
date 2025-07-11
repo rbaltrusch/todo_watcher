@@ -54,6 +54,7 @@ import TodoItem, { Todo, TodoStatus, TodoPriority } from './TodoItem.vue';
 // TODO: global "Collapse" button
 // TODO: sort either by date or by progress
 // TODO: "show all" button
+// TODO: error handling for API calls
 
 const statuses = ["not started", "in progress", "done", "dropped"] as const;
 const priorities = { [TodoPriority.LOW]: "Low", [TodoPriority.MEDIUM]: "Medium", [TodoPriority.HIGH]: "High" } as const;
