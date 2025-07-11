@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
 
 	"todo_watcher/model"
 
@@ -24,7 +25,7 @@ func getTasks(path string) func(c *gin.Context) {
 }
 
 // currently unsafe, but should be fine because this is local only
-func openFile(path string) func(c *gin.Context) {
+func openFile(todoPath string, editor string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		filePath := c.Query("file")
 		if filePath == "" {
@@ -32,13 +33,26 @@ func openFile(path string) func(c *gin.Context) {
 			return
 		}
 
-		execPath, err := exec.LookPath("code")
+		execPath, err := exec.LookPath(editor)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "could not find code editor"})
+			c.JSON(500, gin.H{"error": "could not find editor.", "editor": editor})
 			return
 		}
+
+		// Check if the file exists
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			c.JSON(404, gin.H{"error": fmt.Sprintf("file not found: %s", filePath)})
+			return
+		}
+
+		// Check if the file exists in the todo folder
+		if path.Dir(filePath) != todoPath {
+			c.JSON(400, gin.H{"error": fmt.Sprintf("file %s is not in the todo folder %s", filePath, todoPath)})
+			return
+		}
+
 		cmd := exec.Command(execPath, filePath)
-		cmd.Dir = path
+		cmd.Dir = todoPath
 		err = cmd.Start()
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("could not open file: %v", err)})
@@ -65,9 +79,10 @@ func main() {
 	}
 
 	address := fmt.Sprintf("%s:%s", getEnvOrDefault("HOST", "localhost"), getEnvOrDefault("PORT", "8080"))
+	editor := getEnvOrDefault("EDITOR", "code")
 
 	router := gin.Default()
 	router.GET("/api/todos", getTasks(path))
-	router.GET("/api/open", openFile(path))
+	router.GET("/api/open", openFile(path, editor))
 	router.Run(address)
 }
