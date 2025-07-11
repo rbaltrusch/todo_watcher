@@ -233,7 +233,6 @@ export default defineComponent({
 <style scoped>
 .header {
   text-align: center;
-  margin-bottom: 1rem;
 }
 
 .todo-list-container {
@@ -251,6 +250,7 @@ export default defineComponent({
   display: flex;
   justify-content: center;
   margin-bottom: 1rem;
+  align-items: center;
 }
 
 .btn {
@@ -267,9 +267,11 @@ export default defineComponent({
 
 .doneCount {
   font-size: 1.2rem;
-  color: rgb(100, 211, 100);
+  color: #49f360e7;
   text-align: center;
-  margin: 1rem;
+  margin-top: 0.1rem;
+  margin-bottom: 1rem;
+  text-shadow: 1px 1px 20px #0770178e;
 }
 
 .random-todo-wrapper {
@@ -295,12 +297,9 @@ export default defineComponent({
 
 .random-todo-container > .btn {
   margin-bottom: 0;
-}
-
-.random-todo {
-  text-align: center;
-  font-style: italic;
-  padding: 0.5rem;
+  min-width: unset;
+  max-width: unset;
+  width: unset;
 }
 
 </style>

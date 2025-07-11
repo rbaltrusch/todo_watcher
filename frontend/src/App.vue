@@ -8,6 +8,9 @@ import TodoTree from './components/TodoTree.vue';
       <TodoTree />
     </div>
   </main>
+  <footer>
+    <a href="https://www.flaticon.com/free-icons/zoom" class="attributation" title="zoom icons">Zoom icons created by Ghozi Muhtarom - Flaticon</a>
+  </footer>
 </template>
 
 <style scoped>

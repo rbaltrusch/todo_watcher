@@ -103,8 +103,12 @@ export default defineComponent({
   border-top: 1px solid #333;
 }
 
-.todo-item:hover > .wrapper {
-  border-top: none
+.todo-item:not(.outer):hover > .wrapper:not(.high-priority) {
+  border-top: none;
+}
+
+.random-todo-container > .todo-item:hover {
+  transform: scale(1.005, 1) !important;
 }
 
 .wrapper {
@@ -148,13 +152,10 @@ export default defineComponent({
 }
 
 .btn {
-  background-color: #76889b;
-  color: var(--color-text);;
-  border-radius: 5px;
-  min-width: 10%;
-  text-align: center;
   padding: 0.25rem 0.5rem;
-  cursor: pointer;
+  margin: 0.25rem 0.25rem;
+  max-height: unset;
+  min-height: unset;
 }
 
 .notstarted {
@@ -163,10 +164,12 @@ export default defineComponent({
 
 .inprogress {
   color: rgb(72, 72, 220);
+  text-shadow: 1px 1px 4px rgba(72, 72, 220, 0.5);
 }
 
 .done {
-  color: rgb(100, 211, 100);
+  color: #49f360;
+  text-shadow: 1px 1px 4px #077016;
 }
 
 .todo-item.dropped {
@@ -180,20 +183,23 @@ export default defineComponent({
 }
 
 .wrapper.low-priority {
-  opacity: 0.35;
-  background: linear-gradient(to right, rgb(100, 106, 88), rgb(112, 120, 95));
+  opacity: 0.5;
+  /* background: linear-gradient(to right, rgb(100, 106, 88), rgb(112, 120, 95)); */
+  background: linear-gradient(45deg, var(--color-background), rgba(112, 120, 95, 0.1));
   border-radius: 3px;
 }
 
 .wrapper.high-priority {
-  background-color: rgb(220, 72, 72, 0.5);
+  border: 1px solid #f3495d;
+  box-shadow: 0 0 8px rgba(243, 73, 93, 0.4);
+  filter: brightness(1.1);
   border-radius: 3px;
 }
 
 .wrapper.high-priority:has(> .status-priority > .status.done) {
-  opacity: 0.35;
-  color: rgb(163, 226, 163);
-  background: linear-gradient(to right, rgba(88, 220, 88, 0.5), rgba(172, 220, 172, 0.3));
+  opacity: 0.8;
+  border: 1px solid #4cd964;
+  box-shadow: 0 0 8px #285e30;
   border-radius: 3px;
 }
 </style>

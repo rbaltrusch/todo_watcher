@@ -61,7 +61,7 @@
 body {
   min-height: 100vh;
   color: var(--color-text);
-  background: var(--color-background);
+  margin: 0;
   transition:
     color 0.5s,
     background-color 0.5s;
@@ -83,4 +83,30 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: linear-gradient(to top, #0c0a1d, #19133a);
+  position: relative;
+  z-index: 0;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw;
+  height: 100vh;
+  padding: 0;
+  margin: 0;
+  display: block;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(
+      circle at 84% 68%,          /* light source position */
+      rgba(255, 255, 255, 0.05),   /* highlight color (white) */
+      rgba(255, 255, 255, 0) 20%  /* fade out */
+    ),
+    linear-gradient(to top right, #1818188f, #202020b0);  /* base dark background */
 }
