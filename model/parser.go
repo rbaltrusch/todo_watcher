@@ -60,7 +60,7 @@ type TodoParseResult struct {
 }
 
 var stripPattern = regexp.MustCompile(`\s*:\s*$`)
-var pattern = regexp.MustCompile(`^\s*([x~#])?\s*([!\.])?\s*(.*?)(\?)?$`)
+var pattern = regexp.MustCompile(`^\s*(x\s|[~#])?\s*([!\.])?\s*(.*?)(\?)?$`)
 var dividerPattern = regexp.MustCompile(`^\s*([-=]+)\s*(.*)$`)
 
 func determineIndentationLevel(line string) int {
