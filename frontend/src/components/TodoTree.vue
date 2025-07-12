@@ -145,7 +145,6 @@ const expandSubTasks = (todo: Todo, setting: boolean): void => {
 };
 
 const hideRecursivelyShallow = (todos: Todo[], filter: Filter): void => todos.forEach((todo: Todo) => {
-  console.log(`Checking visibility for todo: ${todo.content}`, todo.visible, filter(todo), todo.subtasks?.some(filter));
   if (todo.visible && filter(todo)) {
     return true;
   }
@@ -225,7 +224,8 @@ export default defineComponent({
       showDone: false as boolean,
       showOnlyHighPriority: false as boolean,
       showOnlyInProgress: false as boolean,
-      searchQuery: '' as string
+      searchQuery: '' as string,
+      socket: null as WebSocket | null,
     };
   },
   methods: {
@@ -256,6 +256,7 @@ export default defineComponent({
       this.showDone = false;
       this.showOnlyHighPriority = false;
       this.showOnlyInProgress = false;
+      this.searchQuery = '';
     },
     expandAll() {
       this.todos.forEach((todo: Todo) => expandSubTasks(todo, true));
@@ -266,6 +267,26 @@ export default defineComponent({
   },
   mounted() {
     this.fetchTodos();
+
+    this.socket = new WebSocket("ws://localhost:8080/ws");
+
+    this.socket.onopen = () => {
+      console.log("WebSocket connected!");
+    };
+
+    this.socket.onmessage = (event) => {
+      // TODO handle event.data to selectively refetch only affected todo
+      console.log("WebSocket message received:", event.data);
+      this.fetchTodos();
+    };
+
+    this.socket.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    this.socket.onclose = () => {
+      console.log("WebSocket connection closed.");
+    };
   }
 });
 </script>

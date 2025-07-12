@@ -3,13 +3,16 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
 
+	"todo_watcher/filewatcher"
 	"todo_watcher/model"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
 )
 
@@ -63,6 +66,33 @@ func openFile(todoPath string, editor string) func(c *gin.Context) {
 	}
 }
 
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Allow all connections by default
+	},
+}
+
+func makeWebSocketHandler(broadcast chan string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			fmt.Println("WebSocket Upgrade failed:", err)
+			return
+		}
+		defer conn.Close()
+
+		for {
+			// Write a message to the WebSocket connection
+			message := <-broadcast
+			err := conn.WriteMessage(websocket.TextMessage, []byte(message))
+			if err != nil {
+				fmt.Println("Write error:", err)
+				break
+			}
+		}
+	}
+}
+
 func getEnvOrDefault(key, defaultValue string) string {
 	value := os.Getenv(key)
 	if value == "" {
@@ -81,7 +111,13 @@ func main() {
 	address := fmt.Sprintf("%s:%s", getEnvOrDefault("HOST", "localhost"), getEnvOrDefault("PORT", "8080"))
 	editor := getEnvOrDefault("EDITOR", "code")
 
+	broadcast := make(chan string)
+	watcher := filewatcher.CreateWatcher(path)
+	defer watcher.Close()
+	go filewatcher.HandleFileEvents(watcher, broadcast)
+
 	router := gin.Default()
+	router.GET("/ws", makeWebSocketHandler(broadcast))
 	router.GET("/api/todos", getTasks(path))
 	router.GET("/api/open", openFile(path, editor))
 	router.Run(address)

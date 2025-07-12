@@ -1,4 +1,4 @@
-package main
+package filewatcher
 
 import (
 	"fmt"
@@ -7,7 +7,20 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-func handleFileEvents(watcher *fsnotify.Watcher) {
+func determineOperation(op *fsnotify.Event) string {
+	if op.Has(fsnotify.Write) {
+		return "WRITE"
+	} else if op.Has(fsnotify.Create) {
+		return "CREATE"
+	} else if op.Has(fsnotify.Remove) {
+		return "DELETE"
+	} else if op.Has(fsnotify.Rename) {
+		return "MOVE"
+	}
+	return ""
+}
+
+func HandleFileEvents(watcher *fsnotify.Watcher, broadcast chan string) {
 	for {
 		select {
 		case event, ok := <-watcher.Events:
@@ -15,19 +28,20 @@ func handleFileEvents(watcher *fsnotify.Watcher) {
 				return
 			}
 			log.Println("event:", event)
-			if event.Has(fsnotify.Write) {
-				log.Println("modified file:", event.Name)
-			}
+			operation := determineOperation(&event)
+			message := fmt.Sprintf("%s; %s", operation, event.Name)
+			broadcast <- message
+			log.Println("Broadcast filewatcher message:", message)
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				return
 			}
-			log.Println("error:", err)
+			log.Println("Filewatcher error:", err)
 		}
 	}
 }
 
-func createWatcher(path string) *fsnotify.Watcher {
+func CreateWatcher(path string) *fsnotify.Watcher {
 	// Create new watcher.
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -40,13 +54,4 @@ func createWatcher(path string) *fsnotify.Watcher {
 		log.Fatal(err)
 	}
 	return watcher
-}
-
-func main() {
-	fmt.Println("Starting file watcher...")
-	path := "C:/Users/richa/Desktop/todo"
-	watcher := createWatcher(path)
-	defer watcher.Close()
-	go handleFileEvents(watcher)
-	select {} // Block main goroutine forever.
 }
