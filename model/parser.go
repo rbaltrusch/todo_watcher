@@ -2,7 +2,6 @@ package model
 
 // TODO: tests
 // TODO: shift hard-coded constants to config file
-// TODO: document parsing rules
 
 import (
 	"fmt"
