@@ -6,6 +6,14 @@
       <input id="queryFilter" class="icon" type="text" autocomplete="off" v-model="searchQuery" placeholder="Search tasks..." title="Filter tasks" />
     </div>
     <div class="wrapper">
+      <label class="filter" for="show-only-high-priority">Show only high priority tasks
+        <input type="checkbox" id="show-only-high-priority" v-model="showOnlyHighPriority" />
+      </label>
+      <label class="filter" for="show-only-in-progress">Show only in progress tasks
+        <input type="checkbox" id="show-only-in-progress" v-model="showOnlyInProgress" />
+      </label>
+    </div>
+    <div class="wrapper">
       <label class="filter" for="show-dropped">Show dropped tasks
         <input type="checkbox" id="show-dropped" v-model="showDropped" />
       </label>
@@ -18,16 +26,14 @@
       <label class="filter" for="show-done">Show done tasks
         <input type="checkbox" id="show-done" v-model="showDone" />
       </label>
-      <label class="filter" for="show-only-high-priority">Show only high priority tasks
-        <input type="checkbox" id="show-only-high-priority" v-model="showOnlyHighPriority" />
-      </label>
     </div>
     <div class="wrapper">
-      <button class="btn" @click="fetchTodos">Refresh</button>
       <button class="btn" @click="expandAll">Expand All</button>
       <button class="btn" @click="collapseAll">Collapse All</button>
-      <button class="btn" @click="getRandomTodo">Get Random Task</button>
+      <button class="btn" @click="showAll">Show all</button>
       <button class="btn" @click="resetFilters">Reset filters</button>
+      <button class="btn" @click="fetchTodos">Refresh</button>
+      <button class="btn" @click="getRandomTodo">Get Random Task</button>
     </div>
     <div class="random-todo-wrapper random-todo-container" v-if="randomTodo">
       <h2 class="header">Random Task</h2>
@@ -50,11 +56,9 @@
 import { defineComponent } from 'vue';
 import TodoItem, { Todo, TodoStatus, TodoPriority } from './TodoItem.vue';
 
-// TODO: Auto-refresh via websocket + filewatcher
-// TODO: global "Collapse" button
 // TODO: sort either by date or by progress
-// TODO: "show all" button
 // TODO: error handling for API calls
+// TODO handle websocket event.data to selectively refetch only affected todo
 
 const statuses = ["not started", "in progress", "done", "dropped"] as const;
 const priorities = { [TodoPriority.LOW]: "Low", [TodoPriority.MEDIUM]: "Medium", [TodoPriority.HIGH]: "High" } as const;
@@ -127,8 +131,10 @@ const checkHighPriorityRecursively = (todo: Todo, showDone: boolean): boolean =>
     return false;
   }
 
-  const highPrioSubTask = todo.subtasks?.filter((todo: Todo) => checkHighPriorityRecursively(todo, showDone)).length || false;
-  if (todo.priority === TodoPriority.HIGH || highPrioSubTask) {
+  // doing subtask computation outside of OR-shortcircuit to trickle down visibility mutation
+  // for that reason also doing filter(...).length instead of some(...)
+  const highPrioritySubTasks = todo.subtasks?.filter((todo: Todo) => checkHighPriorityRecursively(todo, showDone)).length
+  if (todo.priority === TodoPriority.HIGH || highPrioritySubTasks) {
     todo.visible = true;
     return true;
   }
@@ -137,7 +143,17 @@ const checkHighPriorityRecursively = (todo: Todo, showDone: boolean): boolean =>
   return false;
 };
 
-const checkInProgressRecursively = checkHighPriorityRecursively; // TODO
+const checkInProgressRecursively = (todo: Todo): boolean => {
+  // doing subtask computation outside of OR-shortcircuit to trickle down visibility mutation
+  // for that reason also doing filter(...).length instead of some(...)
+  if ((!todo.source && todo.status == TodoStatus.IN_PROGRESS) || todo.subtasks?.filter((todo: Todo) => checkInProgressRecursively(todo)).length) {
+    todo.visible = true;
+    return true;
+  }
+
+  todo.visible = false;
+  return false;
+};
 
 const expandSubTasks = (todo: Todo, setting: boolean): void => {
   todo.showSubtasks = setting;
@@ -184,7 +200,7 @@ export default defineComponent({
         return this.todos;
       }
       if (this.showOnlyInProgress) {
-        this.todos.forEach((todo: Todo) => checkInProgressRecursively(todo, this.showDone));
+        this.todos.forEach((todo: Todo) => checkInProgressRecursively(todo));
         searchQuery();
         return this.todos;
       }
@@ -263,6 +279,12 @@ export default defineComponent({
     },
     collapseAll() {
       this.todos.forEach((todo: Todo) => expandSubTasks(todo, false));
+    },
+    showAll() {
+      this.showDropped = true;
+      this.showTentative = true;
+      this.showLowPriority = true;
+      this.showDone = true;
     }
   },
   mounted() {
@@ -275,7 +297,6 @@ export default defineComponent({
     };
 
     this.socket.onmessage = (event) => {
-      // TODO handle event.data to selectively refetch only affected todo
       console.log("WebSocket message received:", event.data);
       this.fetchTodos();
     };
@@ -335,11 +356,11 @@ label:has(+#queryFilter) {
 
 .doneCount {
   font-size: 1.2rem;
-  color: #49f360e7;
+  color: rgb(102, 221, 118);
   text-align: center;
   margin-top: 0.1rem;
   margin-bottom: 1rem;
-  text-shadow: 1px 1px 20px #0770178e;
+  text-shadow: 1px 1px 1px rgba(102, 221, 118, 0.3), 2px 2px 20px #0770178e;
 }
 
 .random-todo-wrapper {
