@@ -22,7 +22,7 @@ The backend parses the following todo format:
 
 ## Getting started
 
-Setup .env file in the root directory with the following content:
+Setup .env file in the backend directory with the following content:
 
 ```
 HOST (e.g. localhost)
@@ -34,6 +34,7 @@ EDITOR (e.g. code for Visual Studio Code)
 Run backend (written in go 1.19):
 
 ```
+cd backend
 go run main.go
 ```
 
